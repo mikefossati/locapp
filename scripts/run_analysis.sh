@@ -64,7 +64,7 @@ fi
 
 # Check if Python dependencies are available
 echo "Checking Python dependencies..."
-if ! python3 -c "import pandas, yaml, matplotlib, seaborn, plotly" &> /dev/null; then
+if ! python3 -c "import pandas, yaml" &> /dev/null; then
     echo "Error: Required Python dependencies are missing"
     echo "Please install them with: pip3 install -r scripts/requirements.txt"
     echo ""

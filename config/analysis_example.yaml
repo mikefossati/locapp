@@ -1,19 +1,7 @@
 projects:
   root_directories:
-    - "/Users/mike/dev/readrise-app"
-    - "/Users/mike/dev/bookms"
-    - "/Users/mike/dev/spendings"
-    - "/Users/mike/dev/Test"
-    - "/Users/mike/dev/platgame"
-    - "/Users/mike/dev/jira-fetcher"
-    - "/Users/mike/dev/locapp"
-    - "/Users/mike/dev/visausa"
-    - "/Users/mike/dev/angular-tour-of-heroes"
-    - "/Users/mike/dev/magicbot"
-    - "/Users/mike/dev/export"
-    - "/Users/mike/dev/trading"
-    - "/Users/mike/dev/musicsearch"
-    - "/Users/mike/dev/coinmk-mcp"
+    - "/path/to/your/projects"
+    - "."  # Current directory
 
 time_analysis:
   start_date: "2024-01-01"
@@ -31,8 +19,6 @@ filters:
     - "venv"
     - ".pytest_cache"
     - "coverage"
-    - "vendor"
-    - "bower_components"
 
   exclude_files:
     - "*.min.js"
@@ -43,15 +29,8 @@ filters:
     - "*.class"
     - "*.jar"
     - "*.war"
-    - "*.exe"
-    - "*.dll"
-    - "*.so"
-    - "*.dylib"
-    - "*.a"
-    - "*.lib"
     - "package-lock.json"
     - "yarn.lock"
-    - "Pipfile.lock"
 
 output:
   format: ["json", "csv", "html"]
@@ -59,22 +38,16 @@ output:
 # Git analysis settings
 git:
   # Historical checkout - analyzes LOC at end_date state for accuracy
-  checkout_target_date: true  # Checkout commit matching end date before LOC analysis
-  preserve_working_directory: true  # Stash uncommitted changes before checkout
+  checkout_target_date: true
+  preserve_working_directory: true
 
   # Exclude automated commits from analysis
   exclude_authors:
-    - "Jenkins"
-    - "jenkins"
-    - "Jenkins Automation"
     - "GitHub Actions"
     - "github-actions[bot]"
     - "dependabot[bot]"
-    - "renovate[bot]"
+    - "Jenkins"
     - "bot"
-    - "automation"
-    - "CI/CD"
-    - "deploy"
 
 # Commits reporting settings
 reporting:
