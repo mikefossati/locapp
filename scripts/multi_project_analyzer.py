@@ -9,6 +9,7 @@ import json
 import subprocess
 import sys
 import argparse
+import traceback
 from datetime import datetime
 import pandas as pd
 from dataclasses import dataclass, asdict
@@ -54,6 +55,24 @@ class MultiProjectAnalyzer:
         self.config = self._load_config(config_path)
         self.projects = []
         self.results = {}
+        self.errors = []  # Track errors during analysis
+
+    def _record_error(self, error_type: str, context: str, error_message: str, exception: Exception = None):
+        """Record an error that occurred during analysis"""
+        error_record = {
+            'timestamp': datetime.now().isoformat(),
+            'error_type': error_type,
+            'context': context,
+            'message': error_message,
+            'traceback': None
+        }
+
+        if exception:
+            error_record['exception_type'] = type(exception).__name__
+            error_record['traceback'] = traceback.format_exc()
+
+        self.errors.append(error_record)
+        logger.error(f"{error_type} in {context}: {error_message}")
 
     def _load_config(self, config_path: str) -> Dict[str, Any]:
         """Load configuration from YAML file"""
@@ -637,6 +656,8 @@ class MultiProjectAnalyzer:
 
             git_state = None
             checkout_performed = False
+            loc_stats = None
+            change_stats = None
 
             try:
                 # Handle git checkout for historical accuracy if enabled and project is git repo
@@ -669,24 +690,52 @@ class MultiProjectAnalyzer:
                                 logger.warning(f"Could not find target commit for {project.name}")
 
                 # Analyze current LOC (now on historical commit if checkout was performed)
-                loc_stats = self.analyze_current_loc(project)
+                try:
+                    loc_stats = self.analyze_current_loc(project)
+                except Exception as e:
+                    self._record_error("LOC_ANALYSIS_ERROR", f"project {project.name}",
+                                     f"Failed to analyze LOC: {str(e)}", e)
+                    # Create empty LOC stats to continue analysis
+                    loc_stats = LOCStats(0, 0, 0, 0, {})
 
                 # Analyze git changes (this always uses the time range regardless of checkout)
-                change_stats = self.analyze_git_changes(project, start_date, end_date)
+                try:
+                    change_stats = self.analyze_git_changes(project, start_date, end_date)
+                except Exception as e:
+                    self._record_error("GIT_ANALYSIS_ERROR", f"project {project.name}",
+                                     f"Failed to analyze git changes: {str(e)}", e)
+                    # Create empty change stats to continue analysis
+                    change_stats = ChangeStats(0, 0, 0, 0, 0, 0, [], [])
+
+            except Exception as e:
+                self._record_error("PROJECT_PROCESSING_ERROR", f"project {project.name}",
+                                 f"Unexpected error during project processing: {str(e)}", e)
+                # Create minimal stats to continue analysis
+                if not loc_stats:
+                    loc_stats = LOCStats(0, 0, 0, 0, {})
+                if not change_stats:
+                    change_stats = ChangeStats(0, 0, 0, 0, 0, 0, [], [])
 
             finally:
                 # Always restore git state if we modified it
                 if git_state and checkout_performed:
                     logger.info(f"Restoring original git state for {project.name}")
-                    if not self._restore_git_state(git_state):
-                        logger.error(f"Failed to restore git state for {project.name} - manual intervention may be required")
+                    try:
+                        if not self._restore_git_state(git_state):
+                            self._record_error("GIT_RESTORE_ERROR", f"project {project.name}",
+                                             "Failed to restore git state - manual intervention may be required")
+                    except Exception as e:
+                        self._record_error("GIT_RESTORE_ERROR", f"project {project.name}",
+                                         f"Exception during git state restore: {str(e)}", e)
 
-            project_result = {
-                'info': asdict(project),
-                'loc_stats': asdict(loc_stats),
-                'change_stats': asdict(change_stats)
-            }
-            results['projects'].append(project_result)
+            # Ensure we have valid stats before creating project result
+            if loc_stats and change_stats:
+                project_result = {
+                    'info': asdict(project),
+                    'loc_stats': asdict(loc_stats),
+                    'change_stats': asdict(change_stats)
+                }
+                results['projects'].append(project_result)
 
             # Update totals
             results['totals']['total_loc'] += loc_stats.total_lines
@@ -728,8 +777,20 @@ class MultiProjectAnalyzer:
                 language_percentages[lang] = round(percentage, 1)
             results['language_percentages'] = language_percentages
 
+        # Add error information to results
+        results['errors'] = {
+            'count': len(self.errors),
+            'details': self.errors
+        }
+
         self.results = results
-        logger.info("Analysis completed successfully")
+
+        # Log completion status with error summary
+        if self.errors:
+            logger.warning(f"Analysis completed with {len(self.errors)} errors")
+            logger.warning("Run error report generation to see detailed error information")
+        else:
+            logger.info("Analysis completed successfully with no errors")
 
         # Log detailed breakdown
         logger.info("=" * 60)
@@ -773,6 +834,10 @@ class MultiProjectAnalyzer:
             commits_config = self.config.get('reporting', {}).get('commits_reports', {})
             if commits_config.get('generate_html', True):
                 self._generate_commits_html_report(output_dir)
+
+        # Generate error reports if there are errors
+        if self.errors:
+            self._generate_error_reports(output_dir)
 
     def _save_csv_summary(self, output_dir: str):
         """Save project summary as CSV"""
@@ -1117,6 +1182,173 @@ class MultiProjectAnalyzer:
 </html>"""
 
         return html
+
+    def _generate_error_reports(self, output_dir: str):
+        """Generate error reports in HTML and CSV formats"""
+        if not self.errors:
+            return
+
+        # Generate HTML error report
+        self._generate_error_html_report(output_dir)
+
+        # Generate CSV error report
+        self._generate_error_csv_report(output_dir)
+
+    def _generate_error_html_report(self, output_dir: str):
+        """Generate HTML error report"""
+        html_content = self._create_error_html_template()
+        html_path = os.path.join(output_dir, 'error_report.html')
+
+        with open(html_path, 'w') as f:
+            f.write(html_content)
+        logger.info(f"Error HTML report saved to {html_path}")
+
+    def _create_error_html_template(self) -> str:
+        """Create HTML template for error report"""
+        errors = self.errors
+        error_types = {}
+
+        # Count errors by type
+        for error in errors:
+            error_type = error['error_type']
+            if error_type not in error_types:
+                error_types[error_type] = 0
+            error_types[error_type] += 1
+
+        html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Analysis Error Report</title>
+    <style>
+        body {{ font-family: Arial, sans-serif; margin: 40px; }}
+        .summary {{ background: #fff3cd; padding: 20px; border-radius: 5px; margin-bottom: 20px; border-left: 5px solid #ffc107; }}
+        .error-summary {{ background: #f8d7da; padding: 15px; border-radius: 5px; margin-bottom: 20px; border-left: 5px solid #dc3545; }}
+        .metric {{ display: inline-block; margin: 10px 20px; }}
+        .metric-value {{ font-size: 24px; font-weight: bold; color: #dc3545; }}
+        .metric-label {{ font-size: 12px; color: #6c757d; }}
+        table {{ border-collapse: collapse; width: 100%; margin-top: 20px; }}
+        th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
+        th {{ background-color: #f2f2f2; font-weight: bold; }}
+        .error-type {{ font-weight: bold; color: #dc3545; }}
+        .error-context {{ color: #6c757d; font-style: italic; }}
+        .error-message {{ font-family: monospace; background: #f8f9fa; padding: 5px; border-radius: 3px; }}
+        .traceback {{ font-family: monospace; font-size: 11px; background: #f8f9fa; padding: 10px; border-radius: 3px; white-space: pre-wrap; max-height: 200px; overflow-y: auto; }}
+        .toggle-traceback {{ cursor: pointer; color: #007bff; text-decoration: underline; }}
+    </style>
+    <script>
+        function toggleTraceback(id) {{
+            const element = document.getElementById('traceback-' + id);
+            if (element.style.display === 'none') {{
+                element.style.display = 'block';
+            }} else {{
+                element.style.display = 'none';
+            }}
+        }}
+    </script>
+</head>
+<body>
+    <h1>Analysis Error Report</h1>
+    <p>Generated: {datetime.now().isoformat()}</p>
+
+    <div class="error-summary">
+        <h2>Error Summary</h2>
+        <div class="metric">
+            <div class="metric-value">{len(errors)}</div>
+            <div class="metric-label">Total Errors</div>
+        </div>
+        <div class="metric">
+            <div class="metric-value">{len(error_types)}</div>
+            <div class="metric-label">Error Types</div>
+        </div>
+    </div>
+
+    <div class="summary">
+        <h3>Errors by Type</h3>
+        <ul>"""
+
+        for error_type, count in sorted(error_types.items()):
+            html += f"<li><strong>{error_type}</strong>: {count} occurrences</li>"
+
+        html += f"""
+        </ul>
+    </div>
+
+    <h2>Detailed Error Log ({len(errors)} errors)</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Timestamp</th>
+                <th>Type</th>
+                <th>Context</th>
+                <th>Message</th>
+                <th>Details</th>
+            </tr>
+        </thead>
+        <tbody>"""
+
+        for i, error in enumerate(errors):
+            timestamp = error.get('timestamp', 'Unknown')
+            error_type = error.get('error_type', 'Unknown')
+            context = error.get('context', 'Unknown')
+            message = error.get('message', 'No message')
+            traceback_data = error.get('traceback', '')
+
+            html += f"""
+            <tr>
+                <td>{timestamp}</td>
+                <td class="error-type">{error_type}</td>
+                <td class="error-context">{context}</td>
+                <td class="error-message">{message}</td>
+                <td>"""
+
+            if traceback_data:
+                html += f"""
+                    <span class="toggle-traceback" onclick="toggleTraceback({i})">Show/Hide Traceback</span>
+                    <div id="traceback-{i}" class="traceback" style="display: none;">{traceback_data}</div>"""
+            else:
+                html += "No traceback available"
+
+            html += "</td></tr>"
+
+        html += """
+        </tbody>
+    </table>
+
+    <div class="summary">
+        <h3>Recommendations</h3>
+        <ul>
+            <li>Review LOC_ANALYSIS_ERROR entries - these may indicate problems with cloc installation or file permissions</li>
+            <li>Check GIT_ANALYSIS_ERROR entries - these may indicate git repository issues or permission problems</li>
+            <li>Examine PROJECT_PROCESSING_ERROR entries for unexpected failures in project analysis</li>
+            <li>Investigate GIT_RESTORE_ERROR entries - manual git state restoration may be required</li>
+        </ul>
+    </div>
+</body>
+</html>"""
+
+        return html
+
+    def _generate_error_csv_report(self, output_dir: str):
+        """Generate CSV error report"""
+        if not self.errors:
+            return
+
+        csv_data = []
+        for error in self.errors:
+            csv_data.append({
+                'Timestamp': error.get('timestamp', 'Unknown'),
+                'Error Type': error.get('error_type', 'Unknown'),
+                'Context': error.get('context', 'Unknown'),
+                'Message': error.get('message', 'No message'),
+                'Exception Type': error.get('exception_type', ''),
+                'Has Traceback': 'Yes' if error.get('traceback') else 'No'
+            })
+
+        df = pd.DataFrame(csv_data)
+        csv_path = os.path.join(output_dir, 'error_report.csv')
+        df.to_csv(csv_path, index=False)
+        logger.info(f"Error CSV report saved to {csv_path}")
 
 
 def main():

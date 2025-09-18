@@ -56,3 +56,9 @@ reporting:
     generate_csv: true
     max_commit_message_length: 100
     max_files_per_commit_display: 5
+
+  # Error reporting settings
+  error_reports:
+    generate_html: true
+    generate_csv: true
+    include_tracebacks: true
