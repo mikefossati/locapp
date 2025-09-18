@@ -1,0 +1,153 @@
+projects:
+  root_directories:
+    - "/Users/mike/dev/readrise-app"
+    - "/Users/mike/dev/bookms"
+    - "/Users/mike/dev/spendings"
+    - "/Users/mike/dev/Test"
+    - "/Users/mike/dev/platgame"
+    - "/Users/mike/dev/jira-fetcher"
+    - "/Users/mike/dev/locapp"
+    - "/Users/mike/dev/visausa"
+    - "/Users/mike/dev/angular-tour-of-heroes"
+    - "/Users/mike/dev/magicbot"
+    - "/Users/mike/dev/export"
+    - "/Users/mike/dev/trading"
+    - "/Users/mike/dev/musicsearch"
+    - "/Users/mike/dev/coinmk-mcp"
+
+time_analysis:
+  start_date: "2024-01-01"
+  end_date: "2025-09-18"
+  granularity: "weekly"  # daily, weekly, monthly
+
+filters:
+  exclude_directories:
+    - "node_modules"
+    - "target"
+    - "build"
+    - "dist"
+    - ".git"
+    - "__pycache__"
+    - ".venv"
+    - "venv"
+    - ".pytest_cache"
+    - "coverage"
+    - "vendor"
+    - "bower_components"
+
+  exclude_files:
+    - "*.min.js"
+    - "*.min.css"
+    - "*.log"
+    - "*.tmp"
+    - "*.pyc"
+    - "*.class"
+    - "*.jar"
+    - "*.war"
+    - "*.exe"
+    - "*.dll"
+    - "*.so"
+    - "*.dylib"
+    - "*.a"
+    - "*.lib"
+    - "package-lock.json"
+    - "yarn.lock"
+    - "Pipfile.lock"
+
+output:
+  format: ["json", "csv", "html"]
+  charts: true
+  detailed_reports: true
+
+# Optional: Language-specific configurations
+languages:
+  include:
+    - "Python"
+    - "JavaScript"
+    - "TypeScript"
+    - "Java"
+    - "C++"
+    - "C"
+    - "Go"
+    - "Rust"
+    - "Ruby"
+    - "PHP"
+    - "C#"
+    - "Swift"
+    - "Kotlin"
+    - "Scala"
+    - "R"
+    - "MATLAB"
+    - "Shell"
+    - "PowerShell"
+    - "SQL"
+    - "HTML"
+    - "CSS"
+    - "SASS"
+    - "LESS"
+    - "Vue"
+    - "React"
+    - "Angular"
+
+# Performance settings
+performance:
+  parallel_analysis: true
+  max_workers: 4
+  timeout_seconds: 300
+  cache_results: true
+  incremental_analysis: false
+
+# Reporting settings
+reporting:
+  include_file_details: false
+  include_contributor_details: true
+  generate_charts: true
+  chart_types:
+    - "language_distribution"
+    - "change_timeline"
+    - "project_comparison"
+    - "contributor_activity"
+
+  # Commits reporting settings
+  commits_reports:
+    generate_html: true
+    generate_csv: true
+    max_commit_message_length: 100
+    max_files_per_commit_display: 5
+
+# Notification settings (optional)
+notifications:
+  enabled: false
+  email:
+    recipients: []
+    smtp_server: ""
+    smtp_port: 587
+  slack:
+    webhook_url: ""
+    channel: "#dev-metrics"
+
+# Threshold settings for alerts
+thresholds:
+  large_change_lines: 10000
+  high_activity_commits: 100
+  significant_growth_percent: 50
+
+# Git analysis settings
+git:
+  exclude_authors:
+    - "Jenkins"
+    - "jenkins"
+    - "Jenkins Automation"
+    - "GitHub Actions"
+    - "github-actions[bot]"
+    - "dependabot[bot]"
+    - "renovate[bot]"
+    - "bot"
+    - "automation"
+    - "CI/CD"
+    - "deploy"
+    # Add any other automated commit authors you want to exclude
+
+  # Historical checkout settings
+  checkout_target_date: true  # Checkout commit matching end date before LOC analysis
+  preserve_working_directory: true  # Stash uncommitted changes before checkout
